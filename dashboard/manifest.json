@@ -1,0 +1,13 @@
+{
+  "name": "precog",
+  "label": "Precog",
+  "description": "Lessons Hermes learned from its own command failures",
+  "icon": "Eye",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/precog",
+    "position": "after:skills"
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

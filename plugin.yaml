@@ -1,0 +1,50 @@
+name: precog
+version: "0.1.0"
+manifest_version: 2
+description: "Hermes stops repeating its own mistakes: learns every terminal command that failed and the command that fixed it, then fixes the same mistake before it runs again, in any session, with no extra model calls."
+author: 0xNomind
+license: MIT
+homepage: https://github.com/0xNomind/precog
+tags: [learning, terminal, reliability, self-improvement]
+requires_hermes: ">=0.23"
+
+provides_tools: []
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+  - transform_tool_result
+  - pre_llm_call
+provides_middleware:
+  - tool_request
+
+config_schema:
+  mode:
+    type: str
+    choices: [auto, suggest, learn, off]
+    default: auto
+    label: "Mode"
+    description: "auto fixes known mistakes before the command runs; suggest stops and shows the learned fix; learn only collects lessons; off does nothing."
+  briefing:
+    type: bool
+    default: true
+    label: "Brief the model"
+    description: "Once per project per session, tell the model the top lessons for that project (a few lines in the user turn; the system prompt and its cache are untouched)."
+  max_briefing:
+    type: int
+    default: 3
+    label: "Lessons per briefing"
+  tripwire:
+    type: bool
+    default: true
+    label: "Known-failure tripwire"
+    description: "Stop a command that already failed in this project once per session and show what worked instead."
+  annotate:
+    type: bool
+    default: true
+    label: "Annotate tool results"
+    description: "Tell the model when Precog rewrote a command or learned a new lesson."
+  pair_window:
+    type: int
+    default: 8
+    label: "Fix window"
+    description: "How many later terminal commands Precog looks at to find the one that fixed a failure."
