@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create the Precog demo project as its own git repo (default: ~/precog-demo/forecast).
+# Create the Precog demo project as its own git repo (default: /tmp/precog-demo/forecast).
 #
 # The project keeps its dependencies in its own uv venv (.venv, Python 3.11+),
 # like most real Python projects. The shell's default `python3` and `pytest`
@@ -7,7 +7,7 @@
 # find the fix. Precog learns that fix once; later sessions get it right first.
 set -euo pipefail
 src="$(cd "$(dirname "$0")/forecast" && pwd)"
-dest="${1:-$HOME/precog-demo/forecast}"
+dest="${1:-/tmp/precog-demo/forecast}"
 rm -rf "$dest"
 mkdir -p "$(dirname "$dest")"
 cp -R "$src" "$dest"

@@ -16,14 +16,34 @@ lesson, so the mistake never happens again. No extra model calls.
 ```
 Session 1                                   Session 2 (fresh context)
 ─────────                                   ─────────────────────────
-$ python3 -m pytest -q                      model writes: python3 -m pytest -q
+$ python -m pytest -q                       model writes: python -m pytest -q
   No module named pytest        ✗           Precog rewrites before it runs:
-$ pytest -q                                 $ .venv/bin/python -m pytest -q
-  command not found: pytest     ✗             2 passed                    ✓
-$ .venv/bin/python -m pytest -q
-  2 passed                      ✓           0 failed attempts, 0 wasted turns
-  → Precog learned lesson #1
+$ python -m unittest discover   (detour)    $ .venv/bin/python -m pytest -q
+$ .venv/bin/python -m pytest -q               2 passed                    ✓
+  2 passed                      ✓
+  → Precog learned lesson #1                0 failed attempts, 0 wasted turns
 ```
+
+![Precog tab in the Hermes dashboard](assets/dashboard.jpg)
+
+## Measured on a live Hermes session
+
+Hermes 0.23, `deepseek/deepseek-v4-flash`, the demo project in
+[`examples/forecast`](examples/forecast) (tests only pass with the project venv),
+the same prompt each time: *"Run this project's test suite and tell me how many
+tests passed."*
+
+| | Session 1 (learns) | Session 2 (briefed) | Session 3 (rewrite, briefing off) |
+|---|---|---|---|
+| Tool calls | 8 | **1** | **1** |
+| Model calls | 7 | **2** | **2** |
+| Output tokens | 1,015 | **150** | **128** |
+| Failed commands | 1 failure + a `unittest` detour | **0** | **0** |
+| What happened | `python -m pytest` failed, found `.venv`, Precog learned it | the model read Precog's briefing and used `.venv/bin/python` first | the model typed `python -m pytest`; Precog ran `.venv/bin/python -m pytest` |
+
+Replaying 331 real terminal results from an existing Hermes history, Precog
+learned 3 lessons (all environment facts: "tests need the venv activated",
+"`python3` lacks `yaml`") and none from failing tests or script bugs.
 
 ## What it does
 
@@ -87,12 +107,14 @@ Settings (Desktop → Settings → Plugins → Precog, or `plugins.entries.preco
 ## Try the demo
 
 `examples/forecast` is a tiny Python project whose tests only pass with its
-own venv, the most common trap there is:
+own venv, the most common trap there is. The setup script copies it to
+`/tmp/precog-demo/forecast` as its own git repo (needs [uv](https://docs.astral.sh/uv/)):
 
 ```bash
-cd examples/forecast && ./setup.sh
-hermes chat -q "run the tests"      # session 1: fails, finds the fix, Precog learns it
-hermes chat -q "run the tests"      # session 2: the first command already works
+examples/setup-forecast.sh
+cd /tmp/precog-demo/forecast
+hermes chat -q "Run this project's test suite and tell me how many tests passed."   # session 1: learns
+hermes chat -q "Run this project's test suite and tell me how many tests passed."   # session 2: right first time
 hermes precog list
 ```
 
@@ -139,7 +161,7 @@ event log in `<hermes home>/plugin-data/precog/precog.db`.
 ## Develop
 
 ```bash
-~/.hermes/hermes-agent/venv/bin/python -m pytest tests -q
+python -m pytest tests -q          # 39 tests, no Hermes needed
 hermes plugins validate . --install-deps
 hermes plugins doctor . --ci
 ```
