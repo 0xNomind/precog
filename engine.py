@@ -236,7 +236,9 @@ class ErrorSig:
 _ERR_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("no_module", re.compile(r"No module named ['\"]?([A-Za-z0-9_.\-]+)")),
     ("cmd_not_found", re.compile(r"command not found:\s*([^\s:'\"]+)")),
-    ("cmd_not_found", re.compile(r"([^\s:'\"]+): (?:command )?not found")),
+    # Rules that open with a greedy class start only at a token boundary: unanchored, a long
+    # token with no space or colon (minified JS, base64) made matching quadratic.
+    ("cmd_not_found", re.compile(r"(?<![^\s:'\"])([^\s:'\"]+): (?:command )?not found")),
     ("cmd_not_found", re.compile(r"'([^']+)' is not recognized as an internal or external command")),
     ("wrong_pm", re.compile(r"(?:[Uu]se|configured to use|requires)\s+\"?(pnpm|yarn|bun|npm)\b")),
     ("wrong_pm", re.compile(r"ERR_PNPM_[A-Z_]+|Usage Error: This project is configured to use (\w+)")),
@@ -251,7 +253,7 @@ _ERR_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("no_such_file", re.compile(r"can't open file ['\"]([^'\"]+)['\"]")),
     ("no_such_file", re.compile(r"ENOENT: no such file or directory, \w+ ['\"]([^'\"]+)['\"]")),
     ("no_such_file", re.compile(r"(?:cannot access|cd:|open|stat) ['\"]?([^'\":\s]+)['\"]?: No such file or directory")),
-    ("no_such_file", re.compile(r"([^\s:'\"]+): No such file or directory")),
+    ("no_such_file", re.compile(r"(?<![^\s:'\"])([^\s:'\"]+): No such file or directory")),
     ("permission", re.compile(r"Permission denied(?:: ['\"]?([^'\"\s]+))?")),
     ("missing_env", re.compile(r"(?:environment variable|env var)[^A-Z]{0,20}([A-Z][A-Z0-9_]{2,})[^\n]{0,30}(?:not set|is required|missing)")),
     ("missing_env", re.compile(r"KeyError: ['\"]([A-Z][A-Z0-9_]{2,})['\"]")),
@@ -267,10 +269,24 @@ def _clip(text: str, limit: int = 200) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+# Error messages sit at the start or the end of a line. Matching never sees more than
+# this many characters of one line, so a minified or base64 line costs a bounded amount
+# on the agent thread whatever the rules look like.
+_MAX_LINE = 500
+
+
+def _bounded_tail(text: str, lines: int) -> str:
+    """The last *lines* lines of *text*, each longer one cut to its head and tail."""
+    half = _MAX_LINE // 2
+    out = []
+    for ln in (text or "").splitlines()[-lines:]:
+        out.append(ln if len(ln) <= _MAX_LINE else ln[:half] + " … " + ln[-half:])
+    return "\n".join(out)
+
+
 def error_signature(output: str) -> ErrorSig:
     """Find the most informative error in a command's output."""
-    text = output or ""
-    tail = "\n".join(text.splitlines()[-80:])
+    tail = _bounded_tail(output, 80)
     for kind, rx in _ERR_RULES:
         m = rx.search(tail)
         if m:
@@ -360,7 +376,7 @@ def read_terminal_result(command: str, result, segments: Optional[list[Segment]]
 
 def all_env_signatures(output: str) -> list[ErrorSig]:
     """Every distinct environment-class error in *output* (cascades report several)."""
-    tail = "\n".join((output or "").splitlines()[-120:])
+    tail = _bounded_tail(output, 120)
     found: dict[str, ErrorSig] = {}
     for kind, rx in _ERR_RULES:
         if kind not in ENV_KINDS:

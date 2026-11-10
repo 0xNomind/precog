@@ -67,6 +67,41 @@ def test_wrong_package_manager_signature():
     assert sig.kind == "wrong_pm"
 
 
+# One minified or base64 line must not stall the agent thread. Before the rules were
+# anchored, cmd_not_found and no_such_file took ~10 s each on a 50k-character token.
+_LONG_TOKENS = {
+    "letters": "A" * 50_000,
+    "base64": ("aGVsbG8gd29ybGQ" * 3400)[:50_000],
+    "dots": "a." * 25_000,
+    "equals": "=" * 50_000,
+    "colons": "a:" * 25_000,
+}
+
+
+def test_long_single_token_output_is_fast():
+    import time
+
+    for label, token in _LONG_TOKENS.items():
+        start = time.perf_counter()
+        E.error_signature(token)
+        E.all_env_signatures(token)
+        E.read_terminal_result("node build.js", term(token, 1))
+        E.read_terminal_result("node build.js 2>&1 | tail -1", term(token, 0))  # masked-failure path
+        E.is_learnable(E.ErrorSig("no_such_file", "x", ""), token)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 1.0, f"{label}: {elapsed:.2f}s"
+
+
+def test_rules_still_read_the_line_around_a_long_token():
+    junk = "x" * 50_000
+    sig = E.error_signature(f"{junk}\nbash: foo: command not found")
+    assert (sig.kind, sig.subject) == ("cmd_not_found", "foo")
+    sig = E.error_signature(f"cat: {junk}: No such file or directory")
+    assert sig.kind == "no_such_file"  # the cap keeps the line's head and tail
+    sig = E.error_signature("ls: build/out.min.js: No such file or directory")
+    assert (sig.kind, sig.subject) == ("no_such_file", "build/out.min.js")
+
+
 # --- pairing + lessons -----------------------------------------------------
 
 

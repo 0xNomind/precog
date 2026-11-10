@@ -3,7 +3,7 @@
   "label": "Precog",
   "description": "Lessons Hermes learned from its own command failures",
   "icon": "Eye",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "tab": {
     "path": "/precog",
     "position": "after:skills"
